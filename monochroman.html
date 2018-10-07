@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html>
+<meta charset="UTF-8">
+<title>Monochroman</title>
+<script type="text/javascript">
+const BACKEND_URL = 'http://zero.yo2.cz:6969/epd/'
+</script>
+<style>
+* {
+	transition: all 0.1s ease;
+	font-family: monospace;
+}
+body {
+	margin: 0;
+	text-align: center;
+	color: #eee;
+	background: #414141;
+}
+h1 {
+	font-size: 2.25rem;
+}
+a {
+	color: inherit;
+}
+.sidebar {
+	padding: 0px 0px;
+	width: 240px;
+	height: 100vh;
+	overflow: hidden;
+	background: #333;
+}
+.sidebar.left {
+	float: left;
+}
+.sidebar.right {
+	float: right;
+}
+.sidebar canvas {
+	max-width: 200px;
+	max-height: 170px;
+	cursor: zoom-out;
+}
+.sidebar canvas.mini {
+	max-height: 85px;
+	max-width: 100px;
+	cursor: zoom-in;
+}
+#workarea {
+	position: absolute;
+	margin: 20px;
+	width: calc(100% - 240px - 240px - 40px);
+	height: calc(100% - 40px);
+	left: 240px;
+	overflow: hidden;
+}
+#file-selector {
+	display: flex;
+    align-items: center;
+    justify-content: center;
+	border: 3px dotted #999;
+	cursor: pointer;
+	height: 100%;
+	width: 100%;
+	overflow: auto;
+	position: relative;
+	box-sizing: border-box;
+}
+#file-selector div {
+	width: 100%;
+	padding: 35vh 0;
+	position: absolute;
+}
+#work-canvas {
+	position: relative;
+	transform: scale(1);
+	cursor: zoom-in;
+}
+#work-canvas.zoom {
+	transform: scale(2);
+	cursor: zoom-out;
+}
+#footbar {
+	position: absolute;
+	bottom: 0;
+	width: 240px;
+	background: #222222;
+	padding: 1em 0;
+}
+#display {
+	margin-bottom: 0.5rem;
+}
+
+.tools {
+	overflow: hidden;
+	max-height: 600px;
+}
+.tools:not(:first-child) {
+	margin-top: 10px;
+}
+.tools.collapsed {
+	max-height: 25px;
+}
+.tools label small {
+	position: absolute;
+	left: 10px;
+	top: 5px;
+}
+.tools label {
+	display: block;
+	position: relative;
+	margin-top: 0.3em;
+}
+.collapser {
+	width: 100%;
+	background: #222;
+	border: none;
+	color: #888;
+	cursor: pointer;
+	text-align: left;
+  padding: 0.25em 1em;
+}
+.collapser:hover {
+	background: #252525;
+}
+.collapser:active {
+	background: #2a2a2a;
+}
+.collapser::after {
+	content: "\25B2";
+	float: right;
+	transform: scaleY(1);
+	transition: all 0.1s ease;
+}
+.collapsed .collapser::after {
+	transform: scaleY(-1);
+}
+
+select {
+	border: none;
+	overflow: hidden;
+	background: #414141;
+	margin-top: 0.5em;
+	width: 175px;
+}
+optgroup {
+	color: #aaa;
+}
+option {
+	color: #e9ecee;
+}
+
+.reset {
+	cursor: pointer;
+	vertical-align: super;
+	position: absolute;
+	right: 10px;
+}
+.gs-modes {
+	margin: 0.5em 0;
+}
+.gs-modes label {
+	margin: 0;
+}
+.gs-modes button {
+	font-size: 50%;
+	padding: 0.1em 0.2em;
+	margin-bottom: 0.5em;
+}
+big {
+	font-weight: bold;
+}
+input[type=range] {
+	width: 170px;
+	margin: 0;
+}
+input[type=number] {
+	width: 5em;
+	background: #c8c8c8;
+	border: 1px solid;
+	padding: 0.2em;
+	margin: 0.4em;
+}
+input[type=radio] {
+	margin: 0;
+	vertical-align: text-top;
+}
+
+.setting {
+	padding: 0 20px 10px;
+	text-align: left;
+}
+.setting big {
+	display: block;
+	background: #222222;
+	color: #888;
+	margin: 10px -20px 10px;
+	padding: 0.25em 1em;
+}
+.setting label span {
+	vertical-align: middle;
+}
+.setting select {
+	width: 100%;
+}
+.setting input {
+	margin: 0.4em 0.4em 0 0;
+	border: 0px;
+}
+menu {
+	margin: 20px 0 0 ;
+	padding: 0;
+}
+menu button {
+	width: 200px;
+	cursor: pointer;
+}
+button b {
+	font-size: 125%;
+	vertical-align: middle;
+}
+#by {
+}
+#by a {
+	text-decoration: none;
+	display: inline-block;
+	border-bottom: 1px dotted white;
+}
+</style>
+<script>
+const $ = document.querySelector.bind(document)
+const $$ = document.querySelectorAll.bind(document)
+
+const filters = {
+	// Fixed thresholding
+	0: null,
+
+	"3c": [ // cluttered pattern
+		[8, 3, 4],
+		[6, 1, 2],
+		[7, 5, 9],
+	],
+	"3d": [ // disparsed pattern
+		[1, 7, 4],
+		[5, 8, 3],
+		[6, 2, 9],
+	],
+	"2": [ // Bayer 2×2
+		[1, 3],
+		[4, 2],
+	],
+	"4": [ // Bayer 4×4
+		[1,  9,  3, 11],
+		[13, 5, 15,  7],
+		[4, 12,  2, 10],
+		[16, 8, 14,  6],
+	],
+	"8": [ // Bayer 8×8
+		[ 1, 33,  9, 41,  3, 35, 11, 43],
+		[49, 17, 57, 25, 51, 19, 59, 27],
+		[13, 45,  5, 37, 15, 47,  7, 39],
+		[61, 29, 53, 21, 63, 31, 55, 23],
+		[ 4, 36, 12, 44,  2, 34, 10, 42],
+		[52, 20, 60, 28, 50, 18, 58, 26],
+		[16, 48,  8, 40, 14, 46,  6, 38],
+		[64, 32, 56, 24, 62, 30, 54, 22],
+	],
+	// The Floyd-Steinberg filter
+	a: [
+		[ , , ,],
+		[ ,0,7,],
+		[3,5,1,], //  (1/16)
+	],
+	// The Jarvis, Judice, and Ninke filter
+	b: [
+		[ , , , , ,],
+		[ , , , , ,],
+		[ , ,0,7,5,],
+		[3,5,7,5,3,],
+		[1,3,5,3,1,], // (1/48)
+	],
+	// P. Stucki (rework of the Jarvis, Judice, and Ninke filter in 1981)
+	c: [
+		[ , , , , ,],
+		[ , , , , ,],
+		[ , ,0,8,4,],
+		[2,4,8,4,2,],
+		[1,2,4,2,1,], 	// (1/42)
+	],
+	// The Sierra3 1989 (three-line):
+	d: [
+		[ , , , , ,],
+		[ , , , , ,],
+		[ , ,0,5,3,],
+		[2,4,5,4,2,],
+		[ ,2,3,2, ,], // (1/32)
+	],
+	// Atkinson (Apple 1980)
+	e: [
+		[ , , , , ,],
+		[ , , , , ,],
+		[ , ,0,1,1,],
+		[ ,1,1,1, ,],
+		[ , ,1, , ,], // (1/8)
+	]
+}
+
+
+const dimension = {
+	width: 1050,
+	height: 750,
+}
+const gsWeights = {
+	r: 0.299,
+	g: 0.587,
+	b: 0.114,
+}
+const vals = {
+	brightness: 0.0,
+	contrast: 0.0,
+
+	threshold: 0.5,
+	noise: 0.1,
+	range: 0.75,
+	filter: 'c',
+}
+
+const pixelBreak = 2**19
+
+// pregenerate randomnumbers
+const randomMess = Array(2**19-1)
+let nextRandIndex = 0
+for(let i = 0; i < randomMess.length; i++) {
+	randomMess[i] = Math.random()
+}
+
+window.onload = () => {
+	$$("input[type=range]").forEach((input) => {
+		if (!(input.id in vals)) {
+			return
+		}
+		const update = () => {
+			if(["brightness", "contrast"].includes(input.id)) {
+				reGrey()
+			} else {
+				reMono()
+			}
+		}
+		const defVal = vals[input.id]
+		input.value = defVal
+		input.onchange = () => {
+			vals[input.id] = +input.value
+			update()
+		}
+		input.onmousewheel = (e) => {
+			e.preventDefault()
+			input.value = +input.value + +input.step * -e.deltaY/100
+			input.onchange()
+		}
+		const resetBtn = document.createElement('a')
+		resetBtn.className = "reset"
+		resetBtn.title = "default"
+		resetBtn.innerText = "\u293a"
+		resetBtn.onclick = () => {
+			input.value = defVal
+			input.onchange()
+		}
+		input.parentElement.append(resetBtn)
+	})
+
+	if(typeof BACKEND_URL ==='undefined') {
+		$("#send-button").hidden = true
+	} 
+
+
+	$$(".tools").forEach((toolbox) => {
+		const btn = document.createElement("button")
+		btn.className = "collapser"
+		btn.onclick = () => {
+			toolbox.classList.toggle("collapsed")
+		}
+		const title = toolbox.firstElementChild
+		toolbox.insertBefore(btn, title)
+		btn.appendChild(title)
+	})
+
+	$$(".tools canvas").forEach((thumb) => {
+		thumb.onclick = () => {
+			thumb.classList.toggle("mini")
+		}
+	})
+
+	$("#width").value = dimension.width
+	$("#height").value = dimension.height
+
+	$("#gswr").value = gsWeights.r
+	$("#gswg").value = gsWeights.g
+	$("#gswb").value = gsWeights.b
+	$("#filter").value = vals.filter
+
+
+	$("#file-selector").addEventListener("dragenter", stop, false)
+	$("#file-selector").addEventListener("dragover", stop, false)
+	$("#file-selector").addEventListener("drop", loadImage(handleImage), false)
+	$("#file").addEventListener("change", loadImage(handleImage))
+	const retireFileSelector = once(() => {
+		$("#file-selector").setAttribute("for", "")
+		$("#file-selector div").remove()
+	})
+
+	// TODO generalize
+	const colored = $("#colored-canvas")
+	const greyscaled = $("#greyscaled-canvas")
+	const dithered = $("#dithered-canvas")
+	colored.width = greyscaled.width = dithered.width = 0
+	colored.height = greyscaled.height = dithered.height = 0
+
+	const clrCtx = colored.getContext("2d")
+	const gsCtx = greyscaled.getContext("2d")
+	const dtCtx = dithered.getContext("2d")
+
+	const work = $("#work-canvas")
+	work.onclick = () => {
+		work.classList.toggle("zoom")
+	}
+	const wCtx = work.getContext("2d")
+
+	function handleImage() {
+		retireFileSelector()
+
+		// set thumbnail sizes
+		const [thumbWidth, thumbHeight] = fit(this.width, this.height, 200, 170)
+		colored.width = greyscaled.width = dithered.width = thumbWidth
+		colored.height = greyscaled.height = dithered.height = thumbHeight
+		clrCtx.drawImage(this, 0, 0, thumbWidth, thumbHeight)
+
+		let origData
+		let gsData
+		let dtData
+
+		resize = () => {
+			const [workWidth, workHeight, sx, sy, sw, sh] = getDim(this.width, this.height, dimension.width, dimension.height)
+			work.width = workWidth
+			work.height = workHeight
+			wCtx.drawImage(this, sx, sy, sw, sh, 0, 0, workWidth, workHeight)
+
+			// prepare image data layers
+			origData = wCtx.getImageData(0, 0, workWidth, workHeight)
+			gsData = new ImageData(workWidth, workHeight)
+			dtData = new ImageData(workWidth, workHeight)
+			gsData.data.set(origData.data) // because we want preserve  alpha
+			dtData.data.set(origData.data)
+
+			reGrey()
+		}
+
+		const getThreshold = () => vals.threshold + (randomMess[nextRandIndex++ % randomMess.length]*vals.noise - vals.noise/2)
+
+		const asyncIt = new AsyncIterator()
+
+		const reWork = async (all) => {
+			const filterMap = filters[vals.filter]
+
+			let monochroming = filterToMonochroming(vals.filter)
+
+			try {
+				all && await asyncIt.iterate(
+					greyscaling,
+					[origData, gsData, gsWeights, vals.brightness, vals.contrast],
+					([data, height, y]) => {
+						// wCtx.putImageData(gsData, 0, 0, 0, 0, data.width, height-y)
+					},
+				)
+				await asyncIt.iterate(
+					monochroming,
+					[gsData, dtData, getThreshold, filterMap, vals.range],
+					([data, height, y]) => {
+						wCtx.putImageData(dtData, 0, 0, 0, y, data.width, height-y)
+					},
+				)
+			} catch (e) {
+				console.log(e)
+			}
+			sendBitmap("partial")
+		}
+
+		let timeoutId
+
+		reGrey = () => {
+			const imageData = clrCtx.getImageData(0, 0, thumbWidth, thumbHeight)
+			for(let data of greyscaling(imageData, imageData, gsWeights, vals.brightness, vals.contrast)) {
+				gsCtx.putImageData(imageData, 0, 0)
+			}
+			gsCtx.putImageData(imageData, 0, 0)
+			reMono(true)
+		}
+
+		reMono = (all) => {
+			const filterMap = filters[vals.filter]
+			const imageData = gsCtx.getImageData(0, 0, thumbWidth, thumbHeight)
+
+			let monochroming = filterToMonochroming(vals.filter)
+
+			for(let data of monochroming(imageData, imageData, getThreshold, filterMap, vals.range)) {
+				dtCtx.putImageData(imageData, 0, 0)
+			}
+			dtCtx.putImageData(imageData, 0, 0)
+
+			clearTimeout(timeoutId)
+			timeoutId = setTimeout(reWork, 50, all)
+		}
+
+		resize()
+
+	}
+}
+
+function setSaveHref() {
+	const imageUrl = $("#work-canvas").toDataURL("image/png")
+	$("#download-link").setAttribute("href", imageUrl)
+}
+function setSaveBitmapHref() {
+	const imageUrl = "data:;base64," + arrayBufferToBase64(canvasToBitmap($("#work-canvas")))
+	$("#download-bitmap-link").setAttribute("href", imageUrl)
+}
+
+function sendBitmap(updateType) {
+	BACKEND_URL && fetch(`${BACKEND_URL}${updateType}`, {
+		cors: 'no-cors',
+		method: 'POST',
+		body: canvasToBitmap($("#work-canvas")),
+	}).catch((e) => {
+		if (updateType === "full" ) {
+			window.alert(`Server is unreachable\n\n ${e}`)
+		} else {
+			console.error(e)
+		}
+	})
+}
+
+function canvasToBitmap(canvas) {
+	const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data
+
+	// reserve byte for every 8 pixels + 4 bites to store width and height
+	const bytes = new Uint8Array(4 + data.length/4/8)
+
+	bytes[0] = canvas.width >> 8
+	bytes[1] = canvas.width
+	bytes[2] = canvas.height >> 8
+	bytes[3] = canvas.height
+
+	for (let i = 0; i < data.length; i += 4) { // sample R subpixels
+		bytes[4 + (i>>5)] |= data[i] && (128 >> ((i/4)%8)) // i >> 5 means Math.floor(i/(4*8)) 
+	}
+	return bytes
+}
+
+function resize() {}
+function reGrey() {}
+function reMono() {}
+function getDim() { return fill(...arguments) }
+
+function selectDisplay(display) {
+	if(!display) {
+		dimension.width = +$("#width").value
+		dimension.height = +$("#height").value
+	} else {
+		const [ width, height ] = display.split('×').map(x => +x)
+		dimension.width = width
+		dimension.height = height
+		$("#width").value = width
+		$("#height").value = height
+	}
+	resize()
+}
+
+function selectWidth(value) {
+	$('#display').value = ''
+	dimension.width = +value
+	resize()
+}
+
+function selectHeight(value) {
+	$('#display').value = ''
+	dimension.height = +value
+	resize()
+}
+
+
+function stop(e) {
+	e.stopPropagation()
+	e.preventDefault()
+}
+
+
+// contain
+function fit (w, h, maxWidth, maxHeight) {
+	let height, width
+	if (w/h < maxWidth/maxHeight) {
+		height = maxHeight
+		width = w * height/h
+	} else {
+		width = maxWidth
+		height = h * width/w
+	}
+	return [width, height, 0, 0, w, h]
+}
+
+// cover & crop
+function fill (w, h, maxWidth, maxHeight) {
+	let srcH, srcW
+	if (w/h > maxWidth/maxHeight) {
+		srcH = h
+		srcW = maxWidth * h/maxHeight
+	} else {
+		srcW = w
+		srcH = maxHeight * w/maxWidth
+	}
+	return [maxWidth, maxHeight, (w-srcW)/2, (h-srcH)/2, srcW, srcH]
+}
+
+function loadImage(onImageLoad) {
+	return function(e) {
+		stop(e)
+		const files = this.files || e.dataTransfer.files
+
+		for(const file of files) {
+			if (!file.type.match(/image.*/)) {
+				console.error("not image")
+				return
+			}
+
+			$("#download-link").setAttribute("download", file.name.split(".")[0] + ".dithered.png")
+			$("#download-bitmap-link").setAttribute("download", file.name.split(".")[0] + ".dithered.bits")
+			console.log("image dropped")
+			let reader = new FileReader()
+			reader.onload = (e) => {
+				let image = new Image()
+				image.onload = onImageLoad
+				image.src = e.target.result
+				console.log("reader loaded image")
+			}
+			reader.readAsDataURL(file)
+			this.value = ""
+		}
+	}
+}
+
+function filterToMonochroming(filterIndex) {
+	if(+filterIndex === 0) {
+		return thresholding
+	}
+	if(["3c","3d", "2", "4", "8"].includes(filterIndex)) {
+		return patterning
+	}
+	if("abcde".includes(filterIndex)) {
+		return dithering
+	}
+}
+
+function* greyscaling(srcData, destData, weight, brightness, contrast) {
+	const src = srcData.data
+	const dest = destData.data
+	const factor = (contrast + 1) / (1 - contrast)
+	for (let i = 0; i < src.length; i += 4) {
+		const [r, g, b] = [src[i+0], src[i+1], src[i+2]]
+		let grey = weight.r*r + weight.g*g + weight.b*b
+		grey = factor * (grey-128) + 128
+		grey += brightness * 255
+		dest[i+0] = grey
+		dest[i+1] = grey
+		dest[i+2] = grey
+		if (i % pixelBreak === 0) {
+			yield [destData, ...getDoneHeightAndY(i/4, destData.width, pixelBreak)]
+		}
+	}
+	return [destData, destData.height, 0]
+}
+
+function* thresholding(srcData, destData, getThreshold) {
+	const src = srcData.data
+	const dest = destData.data
+	const B = 0, W = 255
+
+	for(let i = 0; i < src.length; i += 4) {
+		const c = (src[i] <= 256 * getThreshold() ? B : W)
+		dest[i+0] = c
+		dest[i+1] = c
+		dest[i+2] = c
+		if(i % pixelBreak === 0) {
+			yield [destData, ...getDoneHeightAndY(i/4, destData.width, pixelBreak)]
+		}
+	}
+	return [destData, destData.height, 0]
+}
+
+function* patterning(srcData, destData, getThreshold, filter, range) {
+	const src = srcData.data
+	const dest = destData.data
+	const width = srcData.width
+	const B = 0, W = 255
+	const size = filter.length
+
+	for(let i = 0; i < src.length; i += 4) {
+		const x = i/4 % width
+		const y = (i/4 - x) / width
+		const level = filter[x%size][y%size]/(size**2+1) // eg. 0..16
+		const threshold = level*range + (1-range)/2 + getThreshold()-0.5
+		const c = (src[i] <= 256 * threshold ? B : W)
+		dest[i+0] = c
+		dest[i+1] = c
+		dest[i+2] = c
+		if(i % pixelBreak === 0) {
+			yield [destData, ...getDoneHeightAndY(i/4, destData.width, pixelBreak)]
+		}
+	}
+	return [destData, destData.height, 0]
+}
+
+function* dithering(srcData, destData, getThreshold, filter, range) {
+	const src = srcData.data
+	const dest = destData.data
+	const errBuff = Array(dest.length/4)
+	const width = srcData.width
+	const height = srcData.height
+	const B = 0, W = 255
+
+	const [fox, foy] = [-Math.floor(filter.length/2), -Math.floor(filter[0].length/2)] // filter center offset
+	const weightSum = filter.reduce((sum, line) => sum + line.reduce((sum, w) => sum+w, 0), 0)
+	const spread = range/weightSum
+
+	// init error buffer
+	for(let i = 0; i < errBuff.length; i++) {
+		errBuff[i] = 0
+	}
+
+	for(let i = 0; i < src.length; i += 4) {
+		const x = i/4 % width
+		const y = (i/4 - x) / width
+		const clr = clamp(-Infinity, +Infinity, src[i] + errBuff[i/4])
+		const c = (clr <= 256 * getThreshold() ? B : W)
+		const err = clr - c
+		dest[i+0] = c
+		dest[i+1] = c
+		dest[i+2] = c
+		// distribute error:
+		for(let j = -foy; j < filter.length; j++) {
+			for(let i = 0; i < filter[j].length; i++) {
+				const weight = filter[j][i]
+				if(!weight) {
+					continue
+				}
+				const xi = x+i+fox
+				const yi = y+j+foy
+				if(xi < 0 || xi >= width || yi < 0 || yi >= height) {
+					continue
+				}
+				errBuff[xi + yi*width] += err*weight*spread
+			}
+		}
+		if(i % pixelBreak === 0) {
+			yield [destData, ...getDoneHeightAndY(i/4, destData.width, pixelBreak)]
+		}
+	}
+	return [destData, destData.height, 0]
+}
+
+function getDoneHeightAndY(i, width, pixelBreak) {
+	return [getDoneHeight(i, width), getDoneY(i, width, pixelBreak)]
+}
+
+function getDoneHeight(i, width) {
+	return (i - i % width)/width
+}
+function getDoneY(i, width, pixelBreak) {
+	return getDoneHeight(i-pixelBreak, width)
+}
+
+function clamp(min, max, val) {
+	return Math.max(min, Math.min(max, val))
+}
+
+function setGSWeights(what, v) {
+	gsWeights[what] = v
+	// normalize
+	const ratio = (1-gsWeights[what])/(gsWeights.r + gsWeights.g + gsWeights.b - gsWeights[what])
+	if (what !== 'r') gsWeights.r *= ratio
+	if (what !== 'g') gsWeights.g *= ratio
+	if (what !== 'b') gsWeights.b *= ratio
+	$("#gswr").value = gsWeights.r
+	$("#gswg").value = gsWeights.g
+	$("#gswb").value = gsWeights.b
+}
+
+function gsPreset(mode) {
+	switch(mode) {
+		case 'r':
+		case 'g':
+		case 'b':
+			setGSWeights(mode, 1)
+			break
+		case 'avg':
+			$("#gswr").value = gsWeights.r = .333
+			$("#gswg").value = gsWeights.g = .333
+			$("#gswb").value = gsWeights.b = .333
+			break
+		case 'light1': //https://en.wikipedia.org/wiki/Relative_luminance - sRGB
+			$("#gswr").value = gsWeights.r = .2126
+			$("#gswg").value = gsWeights.g = .7152
+			$("#gswb").value = gsWeights.b = .0722
+			break
+		case 'light2': // http://www.w3.org/TR/AERT#color-contrast
+			$("#gswr").value = gsWeights.r = .299
+			$("#gswg").value = gsWeights.g = .587
+			$("#gswb").value = gsWeights.b = .114
+			break
+	}
+}
+
+
+class AsyncIterator {
+	constructor () {
+		this.iterators = new WeakMap()
+	}
+
+	iterate (iterFunc, args, collector) {
+		const iterator = iterFunc(...args)
+		this.iterators.set(iterFunc, iterator)
+		const promis = new Promise((resolve, reject) => {
+			const step = () => {
+				if(iterator !== this.iterators.get(iterFunc)) {
+					return reject("interrupted")
+				}
+				const {value, done} = iterator.next()
+				collector(value)
+				if (!done) {
+					setTimeout(step, 0)
+				} else {
+					resolve(value)
+				}
+			}
+			setTimeout(step, 0)
+		})
+		return promis
+	}
+}
+
+function once (fn) {
+	let was = false
+	return () => {
+		if(!was) {
+			was = true
+			return fn(...arguments)
+		}
+	}
+}
+
+function arrayBufferToBase64(buffer) {
+    return btoa(String.fromCharCode.apply(null, buffer))
+}
+
+</script>
+	<div class="sidebar left">
+		<div><h1>Monochroman</h1></div>
+		<div class="tools">
+			<big>File</big>
+			<div class="setting">
+				<menu>
+					<label for="file"><button onclick="this.parentElement.click()"><b>&#128193;</b> open</button></label>
+					<a id="download-link" download><button onclick="setSaveHref()"><b>&#x1F4BE;</b> save png</button></a>
+					<a id="download-bitmap-link" download><button onclick="setSaveBitmapHref()"><b>&#x1F4BE;</b> save bitmap</button></a>
+					<button id="send-button" onclick="sendBitmap('full')"><b>&#8679;</b> send bitmap</button>
+				</menu>
+			</div>
+		</div>
+		<div class="tools">
+			<big>Resolution</big>
+			<div class="setting">
+				<select id="display" onchange="selectDisplay(this.value)" size="9">
+					<optgroup label="e-paper">
+						<option value="200×200">2.54" (200 × 200)</option>
+						<option value="128×296">2.9" (128 × 296)</option>
+						<option value="400×300">4.2" (400 x 300)</option>
+					</optgroup>
+					<optgroup label="display">
+						<option value="640×480">VGA (640 × 480)</option>
+						<option value="1280×720">HD (1280 × 720)</option>
+						<option value="1920×1080">FHD (1920 × 1080)</option>
+					</optgroup>
+					<option value="" selected>custom</option>
+				</select>
+				<label>
+					<input id="width" type="number" min="16" step="8" onchange="selectWidth(this.value)">
+					<span>width</span>
+				</label>
+				<label>
+					<input id="height" type="number" min="16" step="8" onchange="selectHeight(this.value)">
+					<span>height</span>
+				</label>
+			</div>
+		</div>
+		<div class="tools">
+			<big>Fit mode</big>
+			<div class="setting">
+				<label title="whole image fitted to area" >
+					<input type="radio" name="size-method" value="fit" onchange="this.checked && (getDim = fit); resize()">
+					<span>contain (bars)</span>
+				</label>
+				<label title="whole area covered by image" >
+					<input type="radio" name="size-method" value="fill" onchange="this.checked && (getDim = fill); resize()" checked>
+					<span>cover (crop)</span>
+				</label>
+			</div>
+		</div>
+		<div class="tools">
+			<big>Help</big>
+			<div class="setting">
+				<b>Bitmap format:</b>
+				<div style="text-align: left">
+					<div>(Ex. for 8×8 chess pattern)</div>
+					<code style="white-space: pre">
+bin:
+ 00000000 00001000 > width
+ 00000000 00001000 > height
+ 01010101 10101010 \
+ 01010101 10101010  \ pixels 
+ 01010101 10101010  / 0=B,1=W
+ 01010101 10101010 / 
+
+hex:
+ 00 08 00 08 AA 55 AA 55
+ AA 55 AA 55
+
+base64:
+ AAgACFWqVapVqlWq
+					</code>
+				</div>
+			</div>
+		</div>
+		<div id="footbar">
+			<div id="by">
+				By <a href="//yo2.cz/" target="_blank">Drahoslav Bednář</a>
+			</div>
+		</div>
+	</div>
+	<div class="sidebar right">
+		<div class="tools">
+			<big>black &amp; white</big>
+			<canvas id="dithered-canvas"></canvas>
+			<label><div>Threshold</div>
+				<input id="threshold" type="range" min="0.0" max="1.0" step="0.05">
+			</label>
+			<label><div>Noise</div>
+				<input id="noise" type="range" min="0.0" max="1.0" step="0.05">
+			</label>
+			<label><div>Range</div>
+				<input id="range" type="range" min="0.0" max="1.0" step="0.05">
+			</label>
+			<label for="filter">Method</label>
+			<select id="filter" onchange="vals.filter = this.value; reMono()" size="13">
+				<optgroup>
+					<option value="0">Fixed thresholding</option>
+				</optgroup>
+				<optgroup label="ordered dither">
+					<option value="2">Bayer 2×2</option>
+					<option value="3c">cluttered 3×3</option>
+					<option value="3d">disparsed 3×3</option>
+					<option value="4">Bayer 4×4</option>
+					<option value="8">Bayer 8×8</option>
+				</optgroup>
+				<optgroup label="error diffusion">
+					<option value="a">Floyd-Steinberg</option>
+					<option value="e">Atkinson</option>
+					<option value="b">Jarvis-Judice-Ninke</option>
+					<option value="d">Sierra 3</option>
+					<option value="c">Stucky</option>
+				</optgroup>
+			</select>
+		</div>
+		<div class="tools">
+			<big>greyscale</big>
+			<canvas id="greyscaled-canvas"></canvas>
+			<div class="gs-modes">
+				<div>
+					<button onclick="gsPreset('avg'); reGrey()" title="Average">Avg</button>
+					<button onclick="gsPreset('light1'); reGrey()" title="Relative luminance (sRGB)">Lum1</button>
+					<button onclick="gsPreset('light2'); reGrey()" title="Relative luminance (YIQ)">Lum2</button>
+					<button onclick="gsPreset('r'); reGrey()" title="Red filter">R</button>
+					<button onclick="gsPreset('g'); reGrey()" title="Green filter">G</button>
+					<button onclick="gsPreset('b'); reGrey()" title="Blue filter">B</button>
+				</div>
+				<label><small>R</small>
+					<input id="gswr" type="range" min="0.01" max=".99" step="0.01" onchange="setGSWeights('r', +this.value); reGrey()">
+				</label>
+				<label><small>G</small>
+					<input id="gswg" type="range" min="0.01" max=".99" step="0.01" onchange="setGSWeights('g', +this.value); reGrey()">
+				</label>
+				<label><small>B</small>
+					<input id="gswb" type="range" min="0.01" max=".99" step="0.01" onchange="setGSWeights('b', +this.value); reGrey()">
+				</label>
+			</div>
+			<label><div>Brightness</div>
+				<input id="brightness" type="range" min="-0.75" max="0.75" step="0.05">
+			</label>
+			<label><div>Contrast</div>
+				<input id="contrast" type="range" min="-0.75" max="0.75" step="0.05">
+			</label>
+		</div>
+		<div class="tools">
+			<big>original</big>
+			<canvas id="colored-canvas"></canvas>
+		</div>
+
+	</div>
+
+	<div id="workarea">
+		<label for="file" id="file-selector">
+			<div>
+				Drag image here<br><br>
+				- or -<br><br>
+				click to select file<br><br>
+			</div>
+			<canvas id="work-canvas" width="0" height="0"></canvas>
+		</label>
+	</div>
+	<input id="file" name="file" type="file" style="position: fixed; top: -100em">
+</html>
+
