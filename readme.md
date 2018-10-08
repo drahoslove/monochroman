@@ -28,6 +28,32 @@ Aditional features:
  - Adjust brightness and contrast of intermediate grayscale image
  - Narrow range of depth in which error diffusion is applyed
 
+## Examples
+(zoom page 200% or 300% to better se the differences)
+
+**raw**
+
+| Fixed treshold     | cluttered 3×3      | Bayer 2×2          | Bayer 4×4          | Bayer 8×8          |
+|--------------------|--------------------|--------------------|--------------------|--------------------|
+| ![img](ex/0.-.png) | ![img](ex/0.0.png) | ![img](ex/0.1.png) | ![img](ex/0.2.png) | ![img](ex/0.3.png) |
+
+| Floyd-Steinberg    | Atkinson           | Jarvis-Judice-Ninke | Sierra 3          | Stucky             |
+|--------------------|--------------------|--------------------|--------------------|--------------------|
+| ![img](ex/0.4.png) | ![img](ex/0.5.png) | ![img](ex/0.6.png) | ![img](ex/0.7.png) | ![img](ex/0.8.png) |
+
+**with added noise and reduced range**
+
+| Fixed treshold     | Bayer 2×2          | Floyd-Steinberg    | Stucky             |
+|--------------------|--------------------|--------------------|--------------------|
+| ![img](ex/1.-.png) | ![img](ex/1.1.png) | ![img](ex/1.4.png) | ![img](ex/1.8.png) |
+
+**adjusted brightness and contrast**
+
+|                    | On 2.9" waveshare e-paper display |
+|--------------------|--------------------|
+| ![img](ex/x.8.png) | <img src="ex/epd.jpg" width="360px" /> |
+
+
 ## I/O
 
 - Can open files of common image formats (**png**, **jpeg** and whatewer si compatible with html5 canvas)
@@ -60,7 +86,7 @@ Edit `BACKEND_URL` constant on line 6 to enable pushing bitmap to your http serv
 *TODO - commit example of own backend*
 
 ## UI
-![img](monochroman.png)
+![img](ex/monochroman.png)
 
 ## Source of knowlge
   - http://www.efg2.com/Lab/Library/ImageProcessing/DHALF.TXT
