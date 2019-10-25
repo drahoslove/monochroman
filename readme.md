@@ -1,7 +1,7 @@
 # Monochroman
 
 Web based generator of monochromatic images.
-(demo: http://apps.yo2.cz/monochroman/)
+(demo: https://monochroman.draho.cz)
 
 ## What is it for
 It generates black & white (just two colors, not grayscale) images.
