@@ -88,5 +88,5 @@ Edit `BACKEND_URL` constant on line 6 to enable pushing bitmap to your http serv
 ## UI
 ![img](ex/monochroman.png)
 
-## Source of knowlge
-  - http://www.efg2.com/Lab/Library/ImageProcessing/DHALF.TXT
+## Source of knowledge
+  - https://cmitja.files.wordpress.com/2015/01/crockerboulaymorra_digitalhalftone.pdf
