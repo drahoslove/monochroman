@@ -79,6 +79,10 @@ a {
 	transform: scale(2);
 	cursor: zoom-out;
 }
+#dithered-canvas,
+#work-canvas {
+	image-rendering: pixelated;
+}
 #footbar {
 	position: absolute;
 	bottom: 0;
@@ -428,6 +432,25 @@ window.onload = () => {
 	const wCtx = work.getContext("2d")
 	wCtx.imageSmoothingEnabled = false
 
+	const removeAlpha = (imageData, toColor=1) => {
+		imageData.data.forEach((val, i, list) => { // remove alpha
+			if (i % 4 === 3) {
+				const a =  val / 255
+				if (toColor) { // replace alpha with white
+					list[i - 1] = 255 - (255 - list[i - 1]) * a
+					list[i - 2] = 255 - (255 - list[i - 2]) * a
+					list[i - 3] = 255 - (255 - list[i - 3]) * a
+				} else { // replace alpha with black
+					list[i - 1] *= a
+					list[i - 2] *= a
+					list[i - 3] *= a
+				}
+				list[i] = 255
+			}
+		})
+		return imageData
+	}
+
 	function handleImage() {
 		retireFileSelector()
 
@@ -436,6 +459,9 @@ window.onload = () => {
 		colored.width = greyscaled.width = dithered.width = thumbWidth
 		colored.height = greyscaled.height = dithered.height = thumbHeight
 		clrCtx.drawImage(this, 0, 0, thumbWidth, thumbHeight)
+		// remove alpha from thumb
+		const thumbImageData = removeAlpha(clrCtx.getImageData(0, 0, thumbWidth, thumbHeight), 1)
+		clrCtx.putImageData(thumbImageData, 0, 0)
 
 		let origData
 		let gsData
@@ -448,7 +474,9 @@ window.onload = () => {
 			wCtx.drawImage(this, sx, sy, sw, sh, 0, 0, workWidth, workHeight)
 
 			// prepare image data layers
-			origData = wCtx.getImageData(0, 0, workWidth, workHeight)
+			origData = removeAlpha(wCtx.getImageData(0, 0, workWidth, workHeight), 1)
+			wCtx.putImageData(origData, 0, 0)
+
 			gsData = new ImageData(workWidth, workHeight)
 			dtData = new ImageData(workWidth, workHeight)
 			gsData.data.set(origData.data) // because we want preserve  alpha
