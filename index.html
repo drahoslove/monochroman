@@ -417,12 +417,16 @@ window.onload = () => {
 	const clrCtx = colored.getContext("2d")
 	const gsCtx = greyscaled.getContext("2d")
 	const dtCtx = dithered.getContext("2d")
+	clrCtx.imageSmoothingEnabled = false
+	gsCtx.imageSmoothingEnabled = false
+	dtCtx.imageSmoothingEnabled = false
 
 	const work = $("#work-canvas")
 	work.onclick = () => {
 		work.classList.toggle("zoom")
 	}
 	const wCtx = work.getContext("2d")
+	wCtx.imageSmoothingEnabled = false
 
 	function handleImage() {
 		retireFileSelector()
