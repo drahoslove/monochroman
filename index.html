@@ -3,7 +3,7 @@
 <meta charset="UTF-8">
 <title>Monochroman</title>
 <script type="text/javascript">
-const BACKEND_URL = 'http://zero.yo2.cz:6969/epd/'
+const BACKEND_URL = undefined
 </script>
 <style>
 * {
@@ -54,9 +54,7 @@ a {
 	overflow: hidden;
 }
 #file-selector {
-	display: flex;
-    align-items: center;
-    justify-content: center;
+	display: block;
 	border: 3px dotted #999;
 	cursor: pointer;
 	height: 100%;
@@ -65,18 +63,26 @@ a {
 	position: relative;
 	box-sizing: border-box;
 }
-#file-selector div {
+#file-selector span {
+	display: block;
 	width: 100%;
 	padding: 35vh 0;
 	position: absolute;
 }
+#file-selector div {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 100%;
+}
 #work-canvas {
 	position: relative;
 	transform: scale(1);
+	transform-origin: top center;
 	cursor: zoom-in;
 }
 #work-canvas.zoom {
-	transform: scale(2);
+	transform: scale(3);
 	cursor: zoom-out;
 }
 #dithered-canvas,
@@ -92,6 +98,15 @@ a {
 }
 #display {
 	margin-bottom: 0.5rem;
+}
+#display[data-val=""] + #dimensions {
+	display: flex;
+}
+#dimensions {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: center;
 }
 
 .tools {
@@ -238,7 +253,7 @@ const filters = {
 	// Fixed thresholding
 	0: null,
 
-	"3c": [ // cluttered pattern
+	"3c": [ // clustered pattern
 		[8, 3, 4],
 		[6, 1, 2],
 		[7, 5, 9],
@@ -325,7 +340,12 @@ const vals = {
 	threshold: 0.5,
 	noise: 0.1,
 	range: 0.75,
-	filter: 'c',
+	filter: 'b',
+}
+
+const imageSize ={
+	width: 0,
+	height: 0,
 }
 
 const pixelBreak = 2**19
@@ -408,7 +428,7 @@ window.onload = () => {
 	$("#file").addEventListener("change", loadImage(handleImage))
 	const retireFileSelector = once(() => {
 		$("#file-selector").setAttribute("for", "")
-		$("#file-selector div").remove()
+		$("#file-selector span").remove()
 	})
 
 	// TODO generalize
@@ -453,9 +473,12 @@ window.onload = () => {
 
 	function handleImage() {
 		retireFileSelector()
+		imageSize.width = dimension.width = this.width
+		imageSize.height = dimension.height = this.height
+		$('#display').value = '×'
 
 		// set thumbnail sizes
-		const [thumbWidth, thumbHeight] = fit(this.width, this.height, 200, 170)
+		const [, , , , , , thumbWidth, thumbHeight] = fit(this.width, this.height, 200, 170)
 		colored.width = greyscaled.width = dithered.width = thumbWidth
 		colored.height = greyscaled.height = dithered.height = thumbHeight
 		clrCtx.drawImage(this, 0, 0, thumbWidth, thumbHeight)
@@ -468,17 +491,17 @@ window.onload = () => {
 		let dtData
 
 		resize = () => {
-			const [workWidth, workHeight, sx, sy, sw, sh] = getDim(this.width, this.height, dimension.width, dimension.height)
-			work.width = workWidth
-			work.height = workHeight
-			wCtx.drawImage(this, sx, sy, sw, sh, 0, 0, workWidth, workHeight)
+			const [sx, sy, sw, sh, dx, dy, dw, dh] = getDim(this.width, this.height, dimension.width, dimension.height)
+			work.width = dimension.width
+			work.height = dimension.height
+			wCtx.drawImage(this, sx, sy, sw, sh, dx, dy, dw, dh)
 
 			// prepare image data layers
-			origData = removeAlpha(wCtx.getImageData(0, 0, workWidth, workHeight), 1)
+			origData = removeAlpha(wCtx.getImageData(0, 0, work.width, work.height), 1)
 			wCtx.putImageData(origData, 0, 0)
 
-			gsData = new ImageData(workWidth, workHeight)
-			dtData = new ImageData(workWidth, workHeight)
+			gsData = new ImageData(work.width, work.height)
+			dtData = new ImageData(work.width, work.height)
 			gsData.data.set(origData.data) // because we want preserve  alpha
 			dtData.data.set(origData.data)
 
@@ -596,7 +619,7 @@ function selectDisplay(display) {
 		dimension.width = +$("#width").value
 		dimension.height = +$("#height").value
 	} else {
-		const [ width, height ] = display.split('×').map(x => +x)
+		const [width, height] =  display.split('×').map((x, i) => +(x || [ imageSize.width, imageSize.height ][i]))
 		dimension.width = width
 		dimension.height = height
 		$("#width").value = width
@@ -617,6 +640,15 @@ function selectHeight(value) {
 	resize()
 }
 
+function flipDimension() {
+	$('#display').value = ''
+	const w = +$("#width").value
+	const h =	+$("#height").value
+	dimension.height = $("#height").value =  w
+	dimension.width = $("#width").value =  h
+	resize()
+}
+
 
 function stop(e) {
 	e.stopPropagation()
@@ -634,7 +666,10 @@ function fit (w, h, maxWidth, maxHeight) {
 		width = maxWidth
 		height = h * width/w
 	}
-	return [width, height, 0, 0, w, h]
+	return [
+		0, 0, w, h, // src
+		(maxWidth-width)/2, (maxHeight-height)/2, width, height // dest
+	]
 }
 
 // cover & crop
@@ -647,7 +682,10 @@ function fill (w, h, maxWidth, maxHeight) {
 		srcW = w
 		srcH = maxHeight * w/maxWidth
 	}
-	return [maxWidth, maxHeight, (w-srcW)/2, (h-srcH)/2, srcW, srcH]
+	return [
+		(w-srcW)/2, (h-srcH)/2, srcW, srcH, // source
+		0, 0, maxWidth, maxHeight, // dest
+	]
 }
 
 function loadImage(onImageLoad) {
@@ -907,7 +945,7 @@ function arrayBufferToBase64(buffer) {
 		<div class="tools">
 			<big>Resolution</big>
 			<div class="setting">
-				<select id="display" onchange="selectDisplay(this.value)" size="9">
+				<select id="display" onchange="selectDisplay(this.value); this.dataset.val = this.value" size="10">
 					<optgroup label="e-paper">
 						<option value="200×200">1.54" (200 × 200)</option>
 						<option value="122×250">2.13" (122 × 250)</option>
@@ -919,16 +957,22 @@ function arrayBufferToBase64(buffer) {
 						<option value="1280×720">HD (1280 × 720)</option>
 						<option value="1920×1080">FHD (1920 × 1080)</option>
 					</optgroup>
-					<option value="" selected>custom</option>
+					<option value="×" selected>original</option>
+					<option value="">custom</option>
 				</select>
-				<label>
-					<input id="width" type="number" min="16" step="8" onchange="selectWidth(this.value)">
-					<span>width</span>
-				</label>
-				<label>
-					<input id="height" type="number" min="16" step="8" onchange="selectHeight(this.value)">
-					<span>height</span>
-				</label>
+				<div id="dimensions">
+					<div>
+						<label>
+							<input id="width" type="number" min="16" step="8" onchange="selectWidth(this.value)">
+							<span>width</span>
+						</label>
+						<label>
+							<input id="height" type="number" min="16" step="8" onchange="selectHeight(this.value)">
+							<span>height</span>
+						</label>
+					</div>
+					<button id="rotate-dimension" onclick="flipDimension()">⤪</button>
+				</div>
 			</div>
 		</div>
 		<div class="tools">
@@ -955,8 +999,8 @@ bin:
  00000000 00001000 > width
  00000000 00001000 > height
  01010101 10101010 \
- 01010101 10101010  \ pixels 
- 01010101 10101010  / 0=B,1=W
+ 01010101 10101010 &nbsp;\ pixels 
+ 01010101 10101010 &nbsp;/ 0=B,1=W
  01010101 10101010 / 
 
 hex:
@@ -994,18 +1038,18 @@ base64:
 					<option value="0">Fixed thresholding</option>
 				</optgroup>
 				<optgroup label="ordered dither">
-					<option value="2">Bayer 2×2</option>
-					<option value="3c">cluttered 3×3</option>
+					<option value="3c">clustered 3×3</option>
 					<option value="3d">disparsed 3×3</option>
+					<option value="2">Bayer 2×2</option>
 					<option value="4">Bayer 4×4</option>
 					<option value="8">Bayer 8×8</option>
 				</optgroup>
 				<optgroup label="error diffusion">
 					<option value="a">Floyd-Steinberg</option>
 					<option value="e">Atkinson</option>
-					<option value="b">Jarvis-Judice-Ninke</option>
+					<option value="c">Stucki</option>
 					<option value="d">Sierra 3</option>
-					<option value="c">Stucky</option>
+					<option value="b">Jarvis-Judice-Ninke</option>
 				</optgroup>
 			</select>
 		</div>
@@ -1047,12 +1091,14 @@ base64:
 
 	<div id="workarea">
 		<label for="file" id="file-selector">
-			<div>
+			<span>
 				Drag image here<br><br>
 				- or -<br><br>
 				click to select file<br><br>
+			</span>
+			<div>
+				<canvas id="work-canvas" width="0" height="0"></canvas>
 			</div>
-			<canvas id="work-canvas" width="0" height="0"></canvas>
 		</label>
 	</div>
 	<input id="file" name="file" type="file" style="position: fixed; top: -100em">
